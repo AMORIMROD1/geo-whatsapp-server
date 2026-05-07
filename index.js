@@ -6,10 +6,14 @@ const {
 } = require("@whiskeysockets/baileys");
 
 const { Boom } = require("@hapi/boom");
+
 const express = require("express");
 const fetch = require("node-fetch");
 const pino = require("pino");
 const QRCode = require("qrcode");
+
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 
@@ -30,7 +34,9 @@ async function connectToWhatsApp() {
     console.log("INICIANDO WHATSAPP...");
 
     const { state, saveCreds } =
-      await useMultiFileAuthState("./auth_info");
+      await useMultiFileAuthState(
+        "./auth_info"
+      );
 
     const { version } =
       await fetchLatestBaileysVersion();
@@ -39,7 +45,9 @@ async function connectToWhatsApp() {
 
     sock = makeWASocket({
       auth: state,
+
       version,
+
       printQRInTerminal: false,
 
       logger: pino({
@@ -53,15 +61,20 @@ async function connectToWhatsApp() {
       ],
 
       syncFullHistory: false,
+
       markOnlineOnConnect: false,
 
       connectTimeoutMs: 60000,
+
       defaultQueryTimeoutMs: 60000,
 
       generateHighQualityLinkPreview: false
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on(
+      "creds.update",
+      saveCreds
+    );
 
     sock.ev.on(
       "connection.update",
@@ -78,15 +91,23 @@ async function connectToWhatsApp() {
         );
 
         if (qr) {
-          console.log("QR RECEBIDO");
+          console.log(
+            "QR RECEBIDO"
+          );
 
           currentQR =
-            await QRCode.toDataURL(qr);
+            await QRCode.toDataURL(
+              qr
+            );
 
-          console.log("QR GERADO");
+          console.log(
+            "QR GERADO"
+          );
         }
 
-        if (connection === "open") {
+        if (
+          connection === "open"
+        ) {
           console.log(
             "WHATSAPP CONECTADO"
           );
@@ -94,7 +115,9 @@ async function connectToWhatsApp() {
           reconnectAttempts = 0;
         }
 
-        if (connection === "close") {
+        if (
+          connection === "close"
+        ) {
           const statusCode =
             new Boom(
               lastDisconnect?.error
@@ -105,7 +128,9 @@ async function connectToWhatsApp() {
             statusCode
           );
 
-          console.log("CONEXÃO FECHADA");
+          console.log(
+            "CONEXÃO FECHADA"
+          );
 
           const shouldReconnect =
             statusCode !==
@@ -136,26 +161,40 @@ async function connectToWhatsApp() {
 
     sock.ev.on(
       "messages.upsert",
-      async ({ messages, type }) => {
-        if (type !== "notify") return;
+      async ({
+        messages,
+        type
+      }) => {
+        if (
+          type !== "notify"
+        )
+          return;
 
         for (const msg of messages) {
           try {
-            if (msg.key.fromMe) continue;
+            if (
+              msg.key.fromMe
+            )
+              continue;
 
-            if (!msg.message) continue;
+            if (
+              !msg.message
+            )
+              continue;
 
             const from =
               msg.key.remoteJid;
 
             const text =
-              msg.message?.conversation ||
+              msg.message
+                ?.conversation ||
               msg.message
                 ?.extendedTextMessage
                 ?.text ||
               "";
 
-            if (!text) continue;
+            if (!text)
+              continue;
 
             console.log(
               `MENSAGEM RECEBIDA: ${text}`
@@ -206,7 +245,9 @@ async function connectToWhatsApp() {
               result
             );
 
-            if (result?.reply) {
+            if (
+              result?.reply
+            ) {
               await sock.sendMessage(
                 from,
                 {
@@ -280,6 +321,43 @@ app.get("/qr", (req, res) => {
       </body>
     </html>
   `);
+});
+
+app.get("/reset", async (req, res) => {
+  try {
+    const authPath = path.join(
+      __dirname,
+      "auth_info"
+    );
+
+    if (
+      fs.existsSync(authPath)
+    ) {
+      fs.rmSync(authPath, {
+        recursive: true,
+        force: true
+      });
+    }
+
+    currentQR = null;
+
+    res.send(
+      "Sessão apagada. Reiniciando..."
+    );
+
+    console.log(
+      "SESSÃO APAGADA"
+    );
+
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000);
+
+  } catch (err) {
+    console.error(err);
+
+    res.send(err.message);
+  }
 });
 
 const PORT =
